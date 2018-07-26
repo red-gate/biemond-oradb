@@ -204,25 +204,39 @@ define oradb::installdb(
     }
 
     if ! defined(File["${download_dir}/db_install_${version}_${title}.rsp"]) {
+
+      case $version {
+        '11.1.0.6': {
+          $version_specific_template_values = {
+            'oracle_home_name' => $oracle_home_name,
+          }
+        }
+        default: {
+          $version_specific_template_values = {}
+        }
+      }
+
+      $template_parameters = deep_merge(
+        $version_specific_template_values,
+        { 'cluster_nodes'          => $cluster_nodes,
+          'group_install'          => $group_install,
+          'oraInventory'           => $ora_inventory,
+          'oracle_home'            => $oracle_home,
+          'oracle_base'            => $oracle_base,
+          'group_oper'             => $group_oper,
+          'group'                  => $group,
+          'group_backup'           => $group_backup,
+          'group_dg'               => $group_dg,
+          'group_km'               => $group_km,
+          'group_rac'              => $group_rac,
+          'database_type'          => $database_type,
+          'is_rack_one_install'    => $is_rack_one_install,
+          'ee_optional_components' => $ee_optional_components,
+          'ee_options_selection'   => $ee_options_selection,})
+
       file { "${download_dir}/db_install_${version}_${title}.rsp":
         ensure  => present,
-        content => epp("oradb/db_install_${version}.rsp.epp",
-                      { 'cluster_nodes'          => $cluster_nodes,
-                        'group_install'          => $group_install,
-                        'oraInventory'           => $ora_inventory,
-                        'oracle_home'            => $oracle_home,
-                        'oracle_base'            => $oracle_base,
-                        'oracle_home_name'       => $oracle_home_name,
-                        'group_oper'             => $group_oper,
-                        'group'                  => $group,
-                        'group_backup'           => $group_backup,
-                        'group_dg'               => $group_dg,
-                        'group_km'               => $group_km,
-                        'group_rac'              => $group_rac,
-                        'database_type'          => $database_type,
-                        'is_rack_one_install'    => $is_rack_one_install,
-                        'ee_optional_components' => $ee_optional_components,
-                        'ee_options_selection'   => $ee_options_selection }),
+        content => epp("oradb/db_install_${version}.rsp.epp", $template_parameters),
         mode    => '0775',
         owner   => $user,
         group   => $group,
