@@ -46,7 +46,7 @@ define oradb::net(
     path        => $exec_path,
     user        => $user,
     group       => $group,
-    environment => ["USER=${user}",],
+    environment => ["USER=${user}","ORACLE_HOME=${oracle_home}"],
     logoutput   => true,
   }
 }
