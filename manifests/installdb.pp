@@ -53,7 +53,7 @@ define oradb::installdb(
   Optional[String] $ora_inventory_dir                                              = undef,
   String $oracle_base                                                              = undef,
   String $oracle_home                                                              = undef,
-  String $oracle_home_name                                                         = undef,
+  Optional[String] $oracle_home_name                                               = undef,
   Boolean $ee_options_selection                                                    = false,
   Optional[String] $ee_optional_components                                         = undef, # 'oracle.rdbms.partitioning:11.2.0.4.0,oracle.oraolap:11.2.0.4.0,oracle.rdbms.dm:11.2.0.4.0,oracle.rdbms.dv:11.2.0.4.0,oracle.rdbms.lbac:11.2.0.4.0,oracle.rdbms.rat:11.2.0.4.0'
   Boolean $bash_profile                                                            = true,
