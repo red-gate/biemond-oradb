@@ -96,7 +96,7 @@
 define oradb::database(
   String $oracle_base                                             = undef,
   String $oracle_home                                             = undef,
-  Enum['10.2', '11.1', '11.2', '12.1', '12.2'] $version           = lookup('oradb::version'),
+  Enum['9.2', '10.2', '11.1', '11.2', '12.1', '12.2'] $version    = lookup('oradb::version'),
   String $user                                                    = lookup('oradb::user'),
   String $group                                                   = lookup('oradb::group'),
   String $download_dir                                            = lookup('oradb::download_dir'),
@@ -259,7 +259,7 @@ define oradb::database(
         }
       }
 
-      if ( $version == '10.2' or $version == '11.1' ) {
+      if ( $version == '9.2' or $version == '10.2' or $version == '11.1' ) {
         $command_pre = "${elevation_prefix}${oracle_home}/bin/dbca -silent -createDatabase -templateName ${templatename} -gdbname ${globaldb_name} -sid ${db_name} -characterSet ${character_set} -responseFile NO_VALUE -sysPassword ${sys_password} -systemPassword ${system_password} -dbsnmpPassword ${db_snmp_password} -emConfiguration ${em_configuration} "
       }
       elsif ( $version == '11.2' or $container_database == false ) {
