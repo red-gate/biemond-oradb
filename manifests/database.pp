@@ -259,7 +259,10 @@ define oradb::database(
         }
       }
 
-      if ( $version == '9.2' or $version == '10.2' or $version == '11.1' ) {
+      if ( $version == '9.2' ) {
+        $command_pre = "${elevation_prefix}${oracle_home}/bin/dbca -silent -createDatabase -templateName ${templatename} -gdbname ${globaldb_name} -sid ${db_name} -characterSet ${character_set} -responseFile NO_VALUE "
+      }
+      elsif ( $version == '10.2' or $version == '11.1' ) {
         $command_pre = "${elevation_prefix}${oracle_home}/bin/dbca -silent -createDatabase -templateName ${templatename} -gdbname ${globaldb_name} -sid ${db_name} -characterSet ${character_set} -responseFile NO_VALUE -sysPassword ${sys_password} -systemPassword ${system_password} -dbsnmpPassword ${db_snmp_password} -emConfiguration ${em_configuration} "
       }
       elsif ( $version == '11.2' or $container_database == false ) {
@@ -301,7 +304,7 @@ define oradb::database(
       $command = "${command_pre} ${command_storage} ${command_data_file} ${command_var} ${command_init} ${command_nodes} ${elevation_suffix}"
 
     } else {
-      if ( $version == '12.2' ) {
+      if ( $version == '9.2' or $version == '12.2' ) {
         $command = "${elevation_prefix}${oracle_home}/bin/dbca -silent -createDatabase -responseFile ${download_dir}/database_${sanitized_title}.rsp${elevation_suffix}"
       } else {
         $command = "${elevation_prefix}${oracle_home}/bin/dbca -silent -responseFile ${download_dir}/database_${sanitized_title}.rsp${elevation_suffix}"
@@ -316,7 +319,7 @@ define oradb::database(
       user        => 'root',
       group       => 'root',
       cwd         => $oracle_base,
-      environment => ["USER=${user}",],
+      environment => flatten(["USER=${user}", $oradb::extra_environment_variables]),
       logoutput   => true,
     }
   } elsif $action == 'delete' {
@@ -334,7 +337,7 @@ define oradb::database(
       user        => $user,
       group       => $group,
       cwd         => $oracle_base,
-      environment => ["USER=${user}",],
+      environment => flatten(["USER=${user}", $oradb::extra_environment_variables]),
       logoutput   => true,
     }
   }
