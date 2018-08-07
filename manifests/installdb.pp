@@ -47,7 +47,7 @@
 # @param remote_node
 #
 define oradb::installdb(
-  Enum['10.2.0.1', '11.1.0.6', '11.2.0.1','11.2.0.3','11.2.0.4','12.1.0.1','12.1.0.2','12.2.0.1'] $version = undef,
+  Enum['9.2.0.1', '10.2.0.1', '11.1.0.6', '11.2.0.1','11.2.0.3','11.2.0.4','12.1.0.1','12.1.0.2','12.2.0.1'] $version = undef,
   String $file                                                                     = undef,
   Enum['SE', 'EE', 'SEONE', 'SE2', 'HP', 'XP', 'PE'] $database_type                = lookup('oradb:installdb:database_type'),
   Optional[String] $ora_inventory_dir                                              = undef,
@@ -77,6 +77,8 @@ define oradb::installdb(
   Optional[String] $remote_node                                                    = undef,   # hostname or ip address
 )
 {
+  require oradb
+
   $supported_db_kernels = join( lookup('oradb::kernels'), '|')
   if ( $::kernel in $supported_db_kernels == false){
     fail("Unrecognized operating system, please use it on a ${supported_db_kernels} host")
@@ -128,6 +130,10 @@ define oradb::installdb(
 
     if ( $zip_extract ) {
       # In $download_dir, will Puppet extract the ZIP files or is this a pre-extracted directory structure.
+
+      if( $version == '9.2.0.1' ) {
+        fail('Extracting the .cpio install files of 9.2 is not supported. Do it yourself and set the zip_extract parameter to false.')
+      }
 
       if ( $version in ['10.2.0.1', '11.1.0.6', '12.2.0.1']) {
         $file1 =  "${file}.zip"
@@ -206,18 +212,27 @@ define oradb::installdb(
     if ! defined(File["${download_dir}/db_install_${version}_${title}.rsp"]) {
 
       case $version {
+        '9.2.0.1': {
+          $version_specific_template_values = {
+            'oracle_home_name' => $oracle_home_name,
+          }
+          $run_installer_command = "${download_dir}/${file}/Disk1/runInstaller"
+        }
         '10.2.0.1': {
           $version_specific_template_values = {
             'oracle_home_name' => $oracle_home_name,
           }
+          $run_installer_command = "unset DISPLAY;${download_dir}/${file}/database/runInstaller"
         }
         '11.1.0.6': {
           $version_specific_template_values = {
             'oracle_home_name' => $oracle_home_name,
           }
+          $run_installer_command = "unset DISPLAY;${download_dir}/${file}/database/runInstaller"
         }
         default: {
           $version_specific_template_values = {}
+          $run_installer_command = "unset DISPLAY;${download_dir}/${file}/database/runInstaller"
         }
       }
 
@@ -250,12 +265,20 @@ define oradb::installdb(
       }
     }
 
+    if( $version == '9.2.0.1' ) {
+      # due to various hacks we use to get the 9.2 installer to behave, we do end up
+      # getting a "successfull" install to return an exit code of 1.
+      $valid_installer_exit_codes = [0, 1, 6]
+    } else {
+      $valid_installer_exit_codes = [0, 6]
+    }
+
     exec { "install oracle database ${title}":
-      command     => "/bin/sh -c 'unset DISPLAY;${download_dir}/${file}/database/runInstaller -silent -waitforcompletion -ignoreSysPrereqs -ignorePrereq -responseFile ${download_dir}/db_install_${version}_${title}.rsp'",
+      command     => "/bin/sh -c '${run_installer_command} -silent -waitforcompletion -ignoreSysPrereqs -ignorePrereq -responseFile ${download_dir}/db_install_${version}_${title}.rsp'",
       creates     => "${oracle_home}/dbs",
-      environment => ["USER=${user}","LOGNAME=${user}"],
+      environment => flatten(["USER=${user}","LOGNAME=${user}", $oradb::extra_environment_variables]),
       timeout     => 0,
-      returns     => [6,0],
+      returns     => $valid_installer_exit_codes,
       path        => $exec_path,
       user        => $user,
       group       => $group_install,

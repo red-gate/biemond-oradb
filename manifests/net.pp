@@ -23,12 +23,14 @@
 #
 define oradb::net(
   String $oracle_home                   = undef,
-  Enum['10.2', '11.1', '11.2', '12.1', '12.2'] $version = lookup('oradb::version'),
+  Enum['9.2', '10.2', '11.1', '11.2', '12.1', '12.2'] $version = lookup('oradb::version'),
   String $user                          = lookup('oradb::user'),
   String $group                         = lookup('oradb::group'),
   String $download_dir                  = lookup('oradb::download_dir'),
   Integer $db_port                      = lookup('oradb::listener_port'),
 ){
+  require oradb
+
   $exec_path = lookup('oradb::exec_path')
 
   file { "${download_dir}/netca_${version}.rsp":
@@ -46,7 +48,7 @@ define oradb::net(
     path        => $exec_path,
     user        => $user,
     group       => $group,
-    environment => ["USER=${user}","ORACLE_HOME=${oracle_home}"],
+    environment => flatten(["USER=${user}","ORACLE_HOME=${oracle_home}", $oradb::extra_environment_variables]),
     logoutput   => true,
   }
 }
