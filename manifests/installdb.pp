@@ -47,7 +47,7 @@
 # @param remote_node
 #
 define oradb::installdb(
-  Enum['9.2.0.1', '10.2.0.1', '11.1.0.6', '11.2.0.1','11.2.0.3','11.2.0.4','12.1.0.1','12.1.0.2','12.2.0.1'] $version = undef,
+  Enum['9.2.0.1', '10.2.0.1', '11.1.0.6', '11.2.0.1','11.2.0.3','11.2.0.4','12.1.0.1','12.1.0.2','12.2.0.1','18.0.0.0'] $version = undef,
   String $file                                                                     = undef,
   Enum['SE', 'EE', 'SEONE', 'SE2', 'HP', 'XP', 'PE'] $database_type                = lookup('oradb:installdb:database_type'),
   Optional[String] $ora_inventory_dir                                              = undef,
@@ -117,13 +117,26 @@ define oradb::installdb(
     $ora_inventory = "${ora_inventory_dir}/oraInventory"
   }
 
-  db_directory_structure{"oracle structure ${version}_${title}":
-    ensure            => present,
-    oracle_base_dir   => $oracle_base,
-    ora_inventory_dir => $ora_inventory,
-    download_dir      => $download_dir,
-    os_user           => $user,
-    os_group          => $group_install,
+  if ( $version in ['18.0.0.0']) {
+    # add oracle home for the unzip
+    db_directory_structure{"oracle structure ${version}_${title}":
+      ensure            => present,
+      oracle_base_dir   => $oracle_base,
+      oracle_home_dir   => $oracle_home,
+      ora_inventory_dir => $ora_inventory,
+      download_dir      => $download_dir,
+      os_user           => $user,
+      os_group          => $group_install,
+    }
+  } else {
+    db_directory_structure{"oracle structure ${version}_${title}":
+      ensure            => present,
+      oracle_base_dir   => $oracle_base,
+      ora_inventory_dir => $ora_inventory,
+      download_dir      => $download_dir,
+      os_user           => $user,
+      os_group          => $group_install,
+    }
   }
 
   if ( $continue ) {
@@ -135,7 +148,7 @@ define oradb::installdb(
         fail('Extracting the .cpio install files of 9.2 is not supported. Do it yourself and set the zip_extract parameter to false.')
       }
 
-      if ( $version in ['10.2.0.1', '11.1.0.6', '12.2.0.1']) {
+      if ( $version in ['10.2.0.1', '11.1.0.6', '12.2.0.1', '18.0.0.0']) {
         $file1 =  "${file}.zip"
         $total_files = 1
       }
@@ -180,26 +193,40 @@ define oradb::installdb(
         $source = $mount_point
       }
 
-      exec { "extract ${download_dir}/${file1}":
-        command   => "unzip -o ${source}/${file1} -d ${download_dir}/${file}",
-        timeout   => 0,
-        logoutput => false,
-        path      => $exec_path,
-        user      => $user,
-        group     => $group,
-        require   => Db_directory_structure["oracle structure ${version}_${title}"],
-        before    => Exec["install oracle database ${title}"],
-      }
-      if ( $total_files > 1 ) {
-        exec { "extract ${download_dir}/${file2}":
-          command   => "unzip -o ${source}/${file2} -d ${download_dir}/${file}",
+      if ($version in ['18.0.0.0']) {
+        exec { "extract ${download_dir}/${file1}":
+          command   => "unzip -o ${source}/${file1} -d ${oracle_home}",
           timeout   => 0,
           logoutput => false,
           path      => $exec_path,
           user      => $user,
           group     => $group,
-          require   => Exec["extract ${download_dir}/${file1}"],
+          creates   => "${oracle_home}/bin",
+          require   => Db_directory_structure["oracle structure ${version}_${title}"],
           before    => Exec["install oracle database ${title}"],
+        }
+      } else {
+        exec { "extract ${download_dir}/${file1}":
+          command   => "unzip -o ${source}/${file1} -d ${download_dir}/${file}",
+          timeout   => 0,
+          logoutput => false,
+          path      => $exec_path,
+          user      => $user,
+          group     => $group,
+          require   => Db_directory_structure["oracle structure ${version}_${title}"],
+          before    => Exec["install oracle database ${title}"],
+        }
+        if ( $total_files > 1 ) {
+          exec { "extract ${download_dir}/${file2}":
+            command   => "unzip -o ${source}/${file2} -d ${download_dir}/${file}",
+            timeout   => 0,
+            logoutput => false,
+            path      => $exec_path,
+            user      => $user,
+            group     => $group,
+            require   => Exec["extract ${download_dir}/${file1}"],
+            before    => Exec["install oracle database ${title}"],
+          }
         }
       }
     }
@@ -216,23 +243,19 @@ define oradb::installdb(
           $version_specific_template_values = {
             'oracle_home_name' => $oracle_home_name,
           }
-          $run_installer_command = "${download_dir}/${file}/Disk1/runInstaller"
         }
         '10.2.0.1': {
           $version_specific_template_values = {
             'oracle_home_name' => $oracle_home_name,
           }
-          $run_installer_command = "unset DISPLAY;${download_dir}/${file}/database/runInstaller"
         }
         '11.1.0.6': {
           $version_specific_template_values = {
             'oracle_home_name' => $oracle_home_name,
           }
-          $run_installer_command = "unset DISPLAY;${download_dir}/${file}/database/runInstaller"
         }
         default: {
           $version_specific_template_values = {}
-          $run_installer_command = "unset DISPLAY;${download_dir}/${file}/database/runInstaller"
         }
       }
 
@@ -265,17 +288,22 @@ define oradb::installdb(
       }
     }
 
-    if( $version == '9.2.0.1' ) {
+    if ($version in ['18.0.0.0']) {
+      $command = "/bin/sh -c 'unset DISPLAY;cd ${oracle_home};./runInstaller -silent -waitforcompletion -ignorePrereq -responseFile ${download_dir}/db_install_${version}_${title}.rsp'"
+      $valid_installer_exit_codes = [0, 6]
+    } elsif ($version in ['9.2.0.1']) {
+      $command = "/bin/sh -c '${download_dir}/${file}/Disk1/runInstaller -silent -waitforcompletion -ignoreSysPrereqs -ignorePrereq -responseFile ${download_dir}/db_install_${version}_${title}.rsp'"
       # due to various hacks we use to get the 9.2 installer to behave, we do end up
       # getting a "successfull" install to return an exit code of 1.
       $valid_installer_exit_codes = [0, 1, 6]
     } else {
+      $command = "/bin/sh -c 'unset DISPLAY;${download_dir}/${file}/database/runInstaller -silent -waitforcompletion -ignoreSysPrereqs -ignorePrereq -responseFile ${download_dir}/db_install_${version}_${title}.rsp'"
       $valid_installer_exit_codes = [0, 6]
     }
 
     exec { "install oracle database ${title}":
-      command     => "/bin/sh -c '${run_installer_command} -silent -waitforcompletion -ignoreSysPrereqs -ignorePrereq -responseFile ${download_dir}/db_install_${version}_${title}.rsp'",
-      creates     => "${oracle_home}/dbs",
+      command     => $command,
+      # creates     => "${oracle_home}/dbs",
       environment => flatten(["USER=${user}","LOGNAME=${user}", $oradb::extra_environment_variables]),
       timeout     => 0,
       returns     => $valid_installer_exit_codes,

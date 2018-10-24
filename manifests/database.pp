@@ -96,7 +96,7 @@
 define oradb::database(
   String $oracle_base                                             = undef,
   String $oracle_home                                             = undef,
-  Enum['9.2', '10.2', '11.1', '11.2', '12.1', '12.2'] $version    = lookup('oradb::version'),
+  Enum['9.2', '10.2', '11.1', '11.2', '12.1', '12.2', '18.3'] $version = lookup('oradb::version'),
   String $user                                                    = lookup('oradb::user'),
   String $group                                                   = lookup('oradb::group'),
   String $download_dir                                            = lookup('oradb::download_dir'),
@@ -128,6 +128,7 @@ define oradb::database(
   Boolean $container_database                                     = false, # 12.1 feature for pluggable database
   String $puppet_download_mnt_point                               = lookup('oradb::module_mountpoint'),
   Boolean $automatic_memory_management                            = true, # for 12.2 , choose false when more than 4gb memory
+  Optional[Integer] $timeout                                      = 0,
 )
 {
 
@@ -304,7 +305,7 @@ define oradb::database(
       $command = "${command_pre} ${command_storage} ${command_data_file} ${command_var} ${command_init} ${command_nodes} ${elevation_suffix}"
 
     } else {
-      if ( $version == '9.2' or $version == '12.2' ) {
+      if ( $version in ['9.2', '12.2','18.3']) {
         $command = "${elevation_prefix}${oracle_home}/bin/dbca -silent -createDatabase -responseFile ${download_dir}/database_${sanitized_title}.rsp${elevation_suffix}"
       } else {
         $command = "${elevation_prefix}${oracle_home}/bin/dbca -silent -responseFile ${download_dir}/database_${sanitized_title}.rsp${elevation_suffix}"
@@ -314,7 +315,7 @@ define oradb::database(
     exec { "oracle database ${title}":
       command     => $command,
       creates     => "${oracle_base}/admin/${db_name}",
-      timeout     => 0,
+      timeout     => $timeout,
       path        => $exec_path,
       user        => 'root',
       group       => 'root',
@@ -323,7 +324,7 @@ define oradb::database(
       logoutput   => true,
     }
   } elsif $action == 'delete' {
-    if ( $version == '12.2' ) {
+    if ( $version in ['12.2','18.3']) {
       $command = "${oracle_home}/bin/dbca -silent -deleteDatabase -sourceDB ${db_name} -sysDBAUserName sys -sysDBAPassword ${sys_password}"
     } else {
       $command = "${oracle_home}/bin/dbca -silent -responseFile ${download_dir}/database_${sanitized_title}.rsp"
@@ -332,7 +333,7 @@ define oradb::database(
     exec { "oracle database ${title}":
       command     => $command,
       onlyif      => "ls ${oracle_base}/admin/${db_name}",
-      timeout     => 0,
+      timeout     => $timeout,
       path        => $exec_path,
       user        => $user,
       group       => $group,
